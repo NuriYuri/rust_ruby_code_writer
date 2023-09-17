@@ -21,7 +21,10 @@ fn main() -> Result<(), std::io::Error> {
     let result = parser.do_parse();
     let mut writer = BufWriter::new(std::io::stdout());
     write_code(
-        result.ast.expect("Failed to read AST from ParserResult"),
+        result
+            .ast
+            .expect("Failed to read AST from ParserResult")
+            .as_ref(),
         &mut writer,
         0,
     )?;
