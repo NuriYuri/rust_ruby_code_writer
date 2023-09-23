@@ -7,7 +7,7 @@ def test(arg)
     p 1
   when Array, String, Float
     p 3
-  else # Note: https://github.com/lib-ruby-parser/lib-ruby-parser/issues/72
+  else
     p -1
   end
 end

@@ -86,11 +86,15 @@ pub fn write_code<W: Write>(
         }
         Node::BlockPass(pass) => {
             writer.write(b"&")?;
-            write_code(&pass.value, writer, 0)?;
+            if let Some(value) = pass.value.as_ref() {
+                write_code(value, writer, 0)?;
+            }
         }
         Node::Blockarg(arg) => {
             writer.write(b"&")?;
-            writer.write(arg.name.as_bytes())?;
+            if let Some(name) = arg.name.as_ref() {
+                writer.write(name.as_bytes())?;
+            }
         }
         Node::Break(control) => {
             write_block_control_operator!(control, writer, b"break", b"break ", b"break(")
