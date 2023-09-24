@@ -3,7 +3,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use lib_ruby_parser::{Parser, ParserOptions};
+use lib_ruby_parser::{nodes::Int, Loc, Node, Parser, ParserOptions};
 use tests::{
     explore_constants::{explore_constants, make_constant_hash_map},
     insert_test_in_module::mutate_module,
@@ -38,7 +38,25 @@ fn main() -> Result<(), std::io::Error> {
         }
         "explore_constants" => {
             let mut constants = make_constant_hash_map();
-            explore_constants(&mut constants, &node);
+            explore_constants(&mut constants, &node, &|send| {
+                if send.recv.is_none() {
+                    if send.method_name.eq("gen") && send.args.len() == 2 {
+                        if let Node::Int(arg1) = &send.args[0] {
+                            if let Node::Int(arg2) = &send.args[1] {
+                                return Some(Box::new(Node::Int(Int {
+                                    value: (384
+                                        + (arg1.value.parse::<i32>().unwrap())
+                                        + ((arg2.value.parse::<i32>().unwrap()) * 8))
+                                        .to_string(),
+                                    operator_l: None,
+                                    expression_l: Loc { begin: 0, end: 0 },
+                                })));
+                            }
+                        }
+                    }
+                }
+                return None;
+            });
             println!("{:?}", constants);
         }
         _ => {
