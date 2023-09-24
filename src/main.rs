@@ -5,6 +5,7 @@ use std::{
 
 use lib_ruby_parser::{nodes::Int, Loc, Node, Parser, ParserOptions};
 use tests::{
+    edit_methods::edit_methods,
     explore_constants::{explore_constants, make_constant_hash_map},
     insert_test_in_module::mutate_module,
 };
@@ -18,7 +19,7 @@ fn main() -> Result<(), std::io::Error> {
     let ruby_filename = env::args().nth(1).expect("Ruby Filename is expected");
     let instruction = env::args()
         .nth(2)
-        .expect("instruction is expected (write, explore_constants)");
+        .expect("instruction is expected (write, edit_method, explore_constants)");
     let ruby_file_content = fs::read_to_string(ruby_filename.clone())
         .expect(format!("Failed to read ruby file: {}", ruby_filename).as_str());
     let options = ParserOptions {
@@ -59,8 +60,14 @@ fn main() -> Result<(), std::io::Error> {
             });
             println!("{:?}", constants);
         }
+        "edit_method" => {
+            let mut writer = BufWriter::new(std::io::stdout());
+            edit_methods(&mut node);
+            write_code(node.as_ref(), &mut writer, 0)?;
+            writer.flush()?;
+        }
         _ => {
-            println!("Unknown instruction, use write or explore_constants")
+            println!("Unknown instruction, use write, edit_method or explore_constants")
         }
     }
     return Ok(());
