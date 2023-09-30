@@ -1,6 +1,6 @@
 use std::io::{BufWriter, Write};
 
-use lib_ruby_parser::Node;
+use lib_ruby_parser::{Bytes, Node};
 
 use crate::{
     write_array, write_assign, write_block_control_operator, write_body, write_body_with_end,
@@ -36,6 +36,24 @@ pub fn write_code<W: Write>(
             write_code_with_separator(&args.args, writer, b", ")?;
         }
         Node::Array(arr) => {
+            if let Some(begin) = &arr.begin_l {
+                if begin.size() == 3 {
+                    if arr.elements.iter().any(|node| match node {
+                        Node::Dsym(_) => true,
+                        _ => false,
+                    }) {
+                        writer.write(b"%I[")?;
+                        write_code_with_separator(&arr.elements, writer, b" ")?;
+                        writer.write(b"]")?;
+                        return Ok(());
+                    } else if let Some(Node::Sym(_)) = arr.elements.get(0) {
+                        writer.write(b"%i[")?;
+                        write_code_with_separator(&arr.elements, writer, b" ")?;
+                        writer.write(b"]")?;
+                        return Ok(());
+                    }
+                }
+            }
             write_array!(arr, writer, b"[", b"]");
         }
         Node::ArrayPattern(arr) => {
@@ -224,13 +242,31 @@ pub fn write_code<W: Write>(
             writer.write(b".")?;
             write_def_name_arg_and_body!(def, writer, indent);
         }
-        Node::Dstr(_) => {
-            writer.write(b"\"unsupported\"")?;
-            todo!()
+        Node::Dstr(str) => {
+            if let Some(begin) = &str.begin_l {
+                if begin.size() == 1 {
+                    writer.write(b"\"")?;
+                    write_parts(writer, &str.parts, indent, "\"", "\\\"")?;
+                    writer.write(b"\"")?;
+                } else {
+                    writer.write(b"%Q{")?;
+                    write_parts(writer, &str.parts, indent, "}", "\\}")?;
+                    writer.write(b"}")?;
+                }
+            } else {
+                writer.write(b"\"")?;
+                write_parts(writer, &str.parts, indent, "\"", "\\\"")?;
+                writer.write(b"\"")?;
+            }
         }
-        Node::Dsym(_) => {
-            writer.write(b":\"unsupported\"")?;
-            todo!()
+        Node::Dsym(sym) => {
+            if sym.begin_l.is_some() {
+                writer.write(b":\"")?;
+            } else {
+                writer.write(b"\"")?;
+            }
+            write_parts(writer, &sym.parts, indent, "\"", "\\\"")?;
+            writer.write(b"\"")?;
         }
         Node::EFlipFlop(flip_flop) => {
             write_range!(flip_flop, writer, b"...");
@@ -295,9 +331,10 @@ pub fn write_code<W: Write>(
         Node::HashPattern(pat) => {
             write_array!(pat, writer, b"{", b"}");
         }
-        Node::Heredoc(_) => {
-            writer.write(b"<<-HERE\nNot Supported\nHERE")?;
-            todo!()
+        Node::Heredoc(doc) => {
+            writer.write(b"\"")?;
+            write_parts(writer, &doc.parts, indent, "\"", "\\\"")?;
+            writer.write(b"\"")?;
         }
         Node::IFlipFlop(flip_flop) => {
             write_range!(flip_flop, writer, b"..");
@@ -574,9 +611,19 @@ pub fn write_code<W: Write>(
                 writer.write(options.as_bytes())?;
             }
         }
-        Node::Regexp(_) => {
-            writer.write(b"/unsupported/")?;
-            todo!()
+        Node::Regexp(expr) => {
+            if expr.begin_l.size() == 1 {
+                writer.write(b"/")?;
+                write_parts(writer, &expr.parts, indent, "/", "\\/")?;
+                writer.write(b"/")?;
+            } else {
+                writer.write(b"%r{")?;
+                write_parts(writer, &expr.parts, indent, "}", "\\}")?;
+                writer.write(b"}")?;
+            }
+            if let Some(opt) = &expr.options {
+                write_code(opt, writer, indent)?;
+            }
         }
         Node::Rescue(rescue) => {
             if let Some(body) = &rescue.body {
@@ -688,13 +735,9 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Str(str) => {
-            if str.begin_l.is_some() {
-                writer.write(b"\"")?;
-            }
-            writer.write(str.value.as_raw())?;
-            if str.end_l.is_some() {
-                writer.write(b"\"")?;
-            }
+            writer.write(b"\'")?;
+            write_string_with_escape(writer, &str.value, "'", "\'")?;
+            writer.write(b"\'")?;
         }
         Node::Super(super_) => {
             if super_.args.len() > 0 {
@@ -749,13 +792,21 @@ pub fn write_code<W: Write>(
             writer.write(b" while ")?;
             write_code(&while_post.cond, writer, 0)?;
         }
-        Node::XHeredoc(_) => {
-            writer.write(b"<<-`HERE`\nUNSUPPORTED\nHERE")?;
-            todo!();
+        Node::XHeredoc(doc) => {
+            writer.write(b"`")?;
+            write_parts(writer, &doc.parts, indent, "`", "\\`")?;
+            writer.write(b"`")?;
         }
-        Node::Xstr(_) => {
-            writer.write(b"`UNSUPPORTED`")?;
-            todo!();
+        Node::Xstr(str) => {
+            if str.begin_l.size() == 1 {
+                writer.write(b"`")?;
+                write_parts(writer, &str.parts, indent, "`", "\\`")?;
+                writer.write(b"`")?;
+            } else {
+                writer.write(b"%x{")?;
+                write_parts(writer, &str.parts, indent, "}", "\\}")?;
+                writer.write(b"}")?;
+            }
         }
         Node::Yield(control) => {
             write_block_control_operator!(control, writer, b"yield", b"yield ", b"yield(")
@@ -812,4 +863,57 @@ fn is_node_begin_block(node: &Node) -> bool {
         return begin.begin_l.is_none();
     }
     return false;
+}
+
+fn write_string_with_escape<W: Write>(
+    writer: &mut BufWriter<W>,
+    string: &Bytes,
+    escape: &str,
+    escape_to: &str,
+) -> Result<(), std::io::Error> {
+    writer.write(
+        string
+            .to_string_lossy()
+            .replace(escape, escape_to)
+            .replace("#", "\\#")
+            .as_bytes(),
+    )?;
+    return Ok(());
+}
+
+fn write_parts<W: Write>(
+    writer: &mut BufWriter<W>,
+    parts: &Vec<Node>,
+    indent: u32,
+    part_escape: &str,
+    part_escape_to: &str,
+) -> Result<(), std::io::Error> {
+    for part in parts.iter() {
+        match part {
+            Node::Str(node) => {
+                write_string_with_escape(writer, &node.value, part_escape, part_escape_to)?;
+            }
+            Node::Begin(_) => {
+                writer.write(b"#{")?;
+                write_code(part, writer, indent)?;
+                writer.write(b"}")?;
+            }
+            Node::Ivar(node) => {
+                writer.write(b"#@")?;
+                writer.write(node.name.as_bytes())?;
+            }
+            Node::Gvar(node) => {
+                writer.write(b"#$")?;
+                writer.write(node.name.as_bytes())?;
+            }
+            Node::Cvar(node) => {
+                writer.write(b"#@@")?;
+                writer.write(node.name.as_bytes())?;
+            }
+            _ => {
+                writer.write_fmt(format_args!("<Unhandled node {}>", part.str_type()))?;
+            }
+        }
+    }
+    return Ok(());
 }

@@ -9,10 +9,10 @@ class A
     return arg3 + arg1
   end
 
-  def test2(arg88)
-    test(arg88, 1, arg88).method(4, 5)
+  def test2(arg88, kwarg:, **kwrest)
+    test(arg88, 1, kwarg).method(4, 5)
   end
 end
-def test4(some_arg)
-  return some_arg * 4
+def test4(some_arg, kwarg: 4)
+  return some_arg * kwarg
 end
