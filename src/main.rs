@@ -3,6 +3,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use code_writer::CodeWriterContext;
 use lib_ruby_parser::{nodes::Int, Loc, Node, Parser, ParserOptions};
 use tests::{
     edit_methods::edit_methods,
@@ -34,7 +35,7 @@ fn main() -> Result<(), std::io::Error> {
         "write" => {
             let mut writer = BufWriter::new(std::io::stdout());
             mutate_module(&mut node);
-            write_code(node.as_ref(), &mut writer, 0)?;
+            write_code(node.as_ref(), &mut writer, &CodeWriterContext::new())?;
             writer.flush()?;
         }
         "explore_constants" => {
@@ -63,7 +64,7 @@ fn main() -> Result<(), std::io::Error> {
         "edit_method" => {
             let mut writer = BufWriter::new(std::io::stdout());
             edit_methods(&mut node);
-            write_code(node.as_ref(), &mut writer, 0)?;
+            write_code(node.as_ref(), &mut writer, &CodeWriterContext::new())?;
             writer.flush()?;
         }
         _ => {
