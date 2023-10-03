@@ -117,9 +117,15 @@ pub fn write_code<W: Write>(
             let do_block = block.begin_l.size() == 2;
             match &block.args {
                 Some(args) => {
-                    writer.write(if do_block { b" do |" } else { b" { |" })?;
-                    write_code(&args, writer, &child_context)?;
-                    writer.write(if do_block { b"|\n" } else { b"| " })?;
+                    if let Node::Lambda(_) = block.call.as_ref() {
+                        writer.write(b" (")?;
+                        write_code(&args, writer, &child_context)?;
+                        writer.write(if do_block { b") do\n" } else { b") { " })?;
+                    } else {
+                        writer.write(if do_block { b" do |" } else { b" { |" })?;
+                        write_code(&args, writer, &child_context)?;
+                        writer.write(if do_block { b"|\n" } else { b"| " })?;
+                    }
                 }
                 None => {
                     writer.write(if do_block { b" do\n" } else { b" {" })?;
@@ -152,14 +158,7 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Break(control) => {
-            write_block_control_operator!(
-                control,
-                writer,
-                b"break",
-                b"break ",
-                b"break(",
-                child_context
-            )
+            write_block_control_operator!(control, writer, b"break", b"break(", child_context)
         }
         Node::CSend(send) => {
             write_code(&send.recv, writer, &child_context)?;
@@ -230,9 +229,7 @@ pub fn write_code<W: Write>(
             }
             write_assign!(asgn, writer, &child_context);
         }
-        Node::Cbase(_) => {
-            writer.write(b"::")?;
-        }
+        Node::Cbase(_) => {}
         Node::Class(class) => {
             writer.write(b"class ")?;
             write_code(&class.name, writer, &child_context)?;
@@ -457,7 +454,9 @@ pub fn write_code<W: Write>(
             write_code_with_separator(&asgn.indexes, writer, &child_context, b", ")?;
             writer.write(b"]")?;
             if let Some(value) = &asgn.value {
-                writer.write(b" = ")?;
+                if context.parent_node_type != "mlhs" {
+                    writer.write(b" = ")?;
+                }
                 write_code(&value, writer, &child_context)?;
             }
         }
@@ -576,7 +575,12 @@ pub fn write_code<W: Write>(
             if mlhs.begin_l.is_some() {
                 writer.write(b"(")?;
             }
-            write_code_with_separator(&mlhs.items, writer, &child_context, b", ")?;
+            if mlhs.items.len() == 1 {
+                write_code(&mlhs.items[0], writer, &child_context)?;
+                writer.write(b",")?;
+            } else {
+                write_code_with_separator(&mlhs.items, writer, &child_context, b", ")?;
+            }
             if mlhs.end_l.is_some() {
                 writer.write(b")")?;
             }
@@ -587,14 +591,7 @@ pub fn write_code<W: Write>(
             write_body_with_end!(module, writer, &child_context);
         }
         Node::Next(control) => {
-            write_block_control_operator!(
-                control,
-                writer,
-                b"next",
-                b"next ",
-                b"next(",
-                child_context
-            )
+            write_block_control_operator!(control, writer, b"next", b"next(", child_context)
         }
         Node::Nil(_) => {
             writer.write(b"nil")?;
@@ -685,6 +682,17 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Rescue(rescue) => {
+            if rescue.rescue_bodies.len() == 1
+                && (context.parent_node_type.ends_with("asgn")
+                    || context.parent_node_type == "begin")
+            {
+                if let Some(body) = &rescue.body {
+                    write_code(body, writer, &child_context)?;
+                    writer.write(b" ")?;
+                    write_code(&rescue.rescue_bodies[0], writer, &context)?;
+                }
+                return Ok(());
+            }
             if let Some(body) = &rescue.body {
                 write_body!(body, writer, child_context);
             }
@@ -709,9 +717,16 @@ pub fn write_code<W: Write>(
                 writer.write(b" => ")?;
                 write_code(&exc_var, writer, &child_context)?;
             }
-            writer.write(b"\n")?;
-            if let Some(body) = &rescue.body {
-                write_body!(body, writer, child_context.indent());
+            if context.parent_node_type.ends_with("asgn") || context.parent_node_type == "begin" {
+                writer.write(b" ")?;
+                if let Some(body) = &rescue.body {
+                    write_code(body, writer, &child_context.indent())?;
+                }
+            } else {
+                writer.write(b"\n")?;
+                if let Some(body) = &rescue.body {
+                    write_body!(body, writer, child_context.indent());
+                }
             }
         }
         Node::Restarg(arg) => {
@@ -740,8 +755,15 @@ pub fn write_code<W: Write>(
             writer.write(b"self")?;
         }
         Node::Send(send) => {
-            if send.method_name.eq("-@") {
-                writer.write(b"-")?;
+            if send.method_name.ends_with("@")
+                || send.method_name.eq("!")
+                || send.method_name.eq("~")
+            {
+                writer.write(if send.method_name.ends_with("@") {
+                    send.method_name[0..(send.method_name.len() - 1)].as_bytes()
+                } else {
+                    send.method_name.as_bytes()
+                })?;
                 if let Some(recv) = &send.recv {
                     write_code(&recv, writer, &child_context)?;
                 }
@@ -754,31 +776,24 @@ pub fn write_code<W: Write>(
                         writer.write(b" ")?;
                     }
                 }
-                if send.operator_l.is_some() {
+                if send.operator_l.is_some() || context.parent_node_type == "mlhs" {
                     writer.write(send.method_name[0..(send.method_name.len() - 1)].as_bytes())?;
-                    writer.write(b" = ")?;
+                    if context.parent_node_type != "mlhs" {
+                        writer.write(b" = ")?;
+                    }
                     if send.args.len() > 0 {
                         write_code_with_separator(&send.args, writer, &child_context, b", ")?;
                     }
                 } else {
                     writer.write(send.method_name.as_bytes())?;
-                    match send.args.len() {
-                        0 => {}
-                        1 => {
-                            if send.dot_l.is_none() {
-                                writer.write(b" ")?;
-                                write_code(&send.args[0], writer, &child_context)?;
-                            } else {
-                                writer.write(b"(")?;
-                                write_code(&send.args[0], writer, &child_context)?;
-                                writer.write(b")")?;
-                            }
-                        }
-                        _ => {
-                            writer.write(b"(")?;
-                            write_code_with_separator(&send.args, writer, &child_context, b", ")?;
-                            writer.write(b")")?;
-                        }
+                    if send.begin_l.is_some() {
+                        writer.write(b"(")?;
+                    } else if send.args.len() > 0 {
+                        writer.write(b" ")?;
+                    }
+                    write_code_with_separator(&send.args, writer, &child_context, b", ")?;
+                    if send.end_l.is_some() {
+                        writer.write(b")")?;
                     }
                 }
             }
@@ -795,7 +810,13 @@ pub fn write_code<W: Write>(
         }
         Node::Str(str) => {
             writer.write(b"\'")?;
-            write_string_with_escape(writer, &str.value, "'", "\'")?;
+            writer.write(
+                str.value
+                    .to_string_lossy()
+                    .replace("\\", "\\\\")
+                    .replace("'", "\\'")
+                    .as_bytes(),
+            )?;
             writer.write(b"\'")?;
         }
         Node::Super(super_) => {
@@ -810,6 +831,10 @@ pub fn write_code<W: Write>(
         Node::Sym(sym) => {
             if context.parent_node_type == "pair_key" {
                 writer.write(sym.name.as_raw())?;
+            } else if sym.begin_l.is_some() && sym.end_l.is_some() {
+                writer.write(b":\"")?;
+                writer.write(sym.name.as_raw())?;
+                writer.write(b"\"")?;
             } else {
                 if sym.begin_l.is_some() {
                     writer.write(b":")?;
@@ -872,14 +897,7 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Yield(control) => {
-            write_block_control_operator!(
-                control,
-                writer,
-                b"yield",
-                b"yield ",
-                b"yield(",
-                child_context
-            )
+            write_block_control_operator!(control, writer, b"yield", b"yield(", child_context)
         }
         Node::ZSuper(_) => {
             writer.write(b"super")?;
