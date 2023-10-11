@@ -56,18 +56,18 @@ macro_rules! write_def_name_arg_and_body {
                 write_code(&body, $writer, &$context)?;
             }
         } else {
+            $writer.write(b"\n")?;
             if let Some(body) = &$def.body {
-                $writer.write(b"\n")?;
-                match body.as_ref() {
-                    Node::Ensure(_) | Node::Rescue(_) => {
-                        write_code(&body, $writer, &$context.indent())?;
-                    }
-                    _ => {
-                        write_body!(body, $writer, $context.indent());
+                if !method_body_excluded(&$context) {
+                    match body.as_ref() {
+                        Node::Ensure(_) | Node::Rescue(_) => {
+                            write_code(&body, $writer, &$context.indent())?;
+                        }
+                        _ => {
+                            write_body!(body, $writer, $context.indent());
+                        }
                     }
                 }
-            } else {
-                $writer.write(b"\n")?;
             }
             write_indent($writer, $context.indent)?;
             $writer.write(b"end")?;

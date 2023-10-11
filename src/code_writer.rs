@@ -29,11 +29,19 @@ impl CodeWriterContext {
         };
     }
 
-    pub fn new_with_documentation(comments: Vec<Comment>, input: DecodedInput) -> Self {
+    pub fn new_with_documentation(
+        comments: Vec<Comment>,
+        input: DecodedInput,
+        exclude_method_body: bool,
+    ) -> Self {
         return CodeWriterContext {
             parent_node_type: "none",
             indent: 0,
-            documentation_context: Some(Rc::new(DocumentationContext::new(comments, input))),
+            documentation_context: Some(Rc::new(DocumentationContext::new(
+                comments,
+                input,
+                exclude_method_body,
+            ))),
         };
     }
 
@@ -1036,4 +1044,11 @@ fn write_parts<W: Write>(
         }
     }
     return Ok(());
+}
+
+fn method_body_excluded(context: &CodeWriterContext) -> bool {
+    if let Some(documentation_context) = &context.documentation_context {
+        return documentation_context.method_body_excluded();
+    }
+    return false;
 }

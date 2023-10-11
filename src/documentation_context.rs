@@ -5,11 +5,16 @@ use lib_ruby_parser::source::{Comment, DecodedInput};
 pub struct DocumentationContext {
     comments: Vec<Comment>,
     input: DecodedInput,
+    exclude_method_body: bool,
 }
 
 impl DocumentationContext {
-    pub fn new(comments: Vec<Comment>, input: DecodedInput) -> Self {
-        return DocumentationContext { comments, input };
+    pub fn new(comments: Vec<Comment>, input: DecodedInput, exclude_method_body: bool) -> Self {
+        return DocumentationContext {
+            comments,
+            input,
+            exclude_method_body,
+        };
     }
 
     pub fn write_documentation<W: Write>(
@@ -55,5 +60,9 @@ impl DocumentationContext {
         }
 
         return Ok(());
+    }
+
+    pub fn method_body_excluded(&self) -> bool {
+        self.exclude_method_body
     }
 }

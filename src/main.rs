@@ -14,10 +14,10 @@ use tests::{
 
 use crate::code_writer::write_code;
 mod code_writer;
-mod macros;
-mod tests;
 mod combine_modules;
 mod documentation_context;
+mod macros;
+mod tests;
 
 fn main() -> Result<(), std::io::Error> {
     let ruby_filename = env::args().nth(1).expect("Ruby Filename is expected");
@@ -79,7 +79,11 @@ fn main() -> Result<(), std::io::Error> {
         "documentation" => {
             let mut writer = BufWriter::new(std::io::stdout());
             combine_modules(&mut node);
-            write_code(node.as_ref(), &mut writer, &CodeWriterContext::new_with_documentation(result.comments, result.input))?;
+            write_code(
+                node.as_ref(),
+                &mut writer,
+                &CodeWriterContext::new_with_documentation(result.comments, result.input, true),
+            )?;
             writer.flush()?;
         }
         _ => {
