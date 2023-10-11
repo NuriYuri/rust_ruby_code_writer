@@ -4,6 +4,7 @@ use std::{
 };
 
 use code_writer::CodeWriterContext;
+use combine_modules::combine_modules;
 use lib_ruby_parser::{nodes::Int, Loc, Node, Parser, ParserOptions};
 use tests::{
     edit_methods::edit_methods,
@@ -15,12 +16,13 @@ use crate::code_writer::write_code;
 mod code_writer;
 mod macros;
 mod tests;
+mod combine_modules;
 
 fn main() -> Result<(), std::io::Error> {
     let ruby_filename = env::args().nth(1).expect("Ruby Filename is expected");
     let instruction = env::args()
         .nth(2)
-        .expect("instruction is expected (write, edit_method, explore_constants)");
+        .expect("instruction is expected (write, edit_method, explore_constants, combine_modules)");
     let ruby_file_content = fs::read_to_string(ruby_filename.clone())
         .expect(format!("Failed to read ruby file: {}", ruby_filename).as_str());
     let options = ParserOptions {
@@ -64,6 +66,12 @@ fn main() -> Result<(), std::io::Error> {
         "edit_method" => {
             let mut writer = BufWriter::new(std::io::stdout());
             edit_methods(&mut node);
+            write_code(node.as_ref(), &mut writer, &CodeWriterContext::new())?;
+            writer.flush()?;
+        }
+        "combine_modules" => {
+            let mut writer = BufWriter::new(std::io::stdout());
+            combine_modules(&mut node);
             write_code(node.as_ref(), &mut writer, &CodeWriterContext::new())?;
             writer.flush()?;
         }
