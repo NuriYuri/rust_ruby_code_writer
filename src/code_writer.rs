@@ -1,15 +1,23 @@
-use std::io::{BufWriter, Write};
+use std::{
+    io::{BufWriter, Write},
+    rc::Rc,
+};
 
-use lib_ruby_parser::{Bytes, Node};
+use lib_ruby_parser::{
+    source::{Comment, DecodedInput},
+    Bytes, Node,
+};
 
 use crate::{
-    write_array, write_assign, write_block_control_operator, write_body, write_body_with_end,
-    write_def_name_arg_and_body, write_exe, write_range, write_until_while,
+    documentation_context::DocumentationContext, write_array, write_assign,
+    write_block_control_operator, write_body, write_body_with_end, write_def_name_arg_and_body,
+    write_documentation, write_exe, write_range, write_until_while,
 };
 
 pub struct CodeWriterContext {
     pub parent_node_type: &'static str,
     pub indent: u32,
+    documentation_context: Option<Rc<DocumentationContext>>,
 }
 
 impl CodeWriterContext {
@@ -17,6 +25,15 @@ impl CodeWriterContext {
         return CodeWriterContext {
             parent_node_type: "none",
             indent: 0,
+            documentation_context: None,
+        };
+    }
+
+    pub fn new_with_documentation(comments: Vec<Comment>, input: DecodedInput) -> Self {
+        return CodeWriterContext {
+            parent_node_type: "none",
+            indent: 0,
+            documentation_context: Some(Rc::new(DocumentationContext::new(comments, input))),
         };
     }
 
@@ -24,6 +41,7 @@ impl CodeWriterContext {
         return CodeWriterContext {
             parent_node_type: node_type,
             indent: self.indent,
+            documentation_context: self.documentation_context.clone(),
         };
     }
 
@@ -31,6 +49,7 @@ impl CodeWriterContext {
         return CodeWriterContext {
             parent_node_type: self.parent_node_type,
             indent: self.indent + 1,
+            documentation_context: self.documentation_context.clone(),
         };
     }
 
@@ -38,6 +57,7 @@ impl CodeWriterContext {
         return CodeWriterContext {
             parent_node_type: self.parent_node_type,
             indent: self.indent - 1,
+            documentation_context: self.documentation_context.clone(),
         };
     }
 }
@@ -224,6 +244,7 @@ pub fn write_code<W: Write>(
             writer.write(b"end")?;
         }
         Node::Casgn(asgn) => {
+            write_documentation!(asgn, writer, context);
             if let Some(scope) = &asgn.scope {
                 write_code(&scope, writer, &child_context)?;
             }
@@ -231,6 +252,7 @@ pub fn write_code<W: Write>(
         }
         Node::Cbase(_) => {}
         Node::Class(class) => {
+            write_documentation!(class, writer, context);
             writer.write(b"class ")?;
             write_code(&class.name, writer, &child_context)?;
             if let Some(super_class) = &class.superclass {
@@ -264,6 +286,7 @@ pub fn write_code<W: Write>(
             write_assign!(asgn, writer, &child_context);
         }
         Node::Def(def) => {
+            write_documentation!(def, writer, context);
             writer.write(b"def ")?;
             write_def_name_arg_and_body!(def, writer, &child_context);
         }
@@ -278,6 +301,7 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Defs(def) => {
+            write_documentation!(def, writer, context);
             writer.write(b"def ")?;
             write_code(&def.definee, writer, &child_context)?;
             writer.write(b".")?;
@@ -586,6 +610,7 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Module(module) => {
+            write_documentation!(module, writer, context);
             writer.write(b"module ")?;
             write_code(&module.name, writer, &child_context)?;
             write_body_with_end!(module, writer, &child_context);
@@ -785,6 +810,12 @@ pub fn write_code<W: Write>(
                         write_code_with_separator(&send.args, writer, &child_context, b", ")?;
                     }
                 } else {
+                    match send.method_name.as_str() {
+                        "attr_accessor" | "attr_reader" | "attr_writer" => {
+                            write_documentation!(send, writer, context);
+                        }
+                        _ => {}
+                    }
                     writer.write(send.method_name.as_bytes())?;
                     if send.begin_l.is_some() {
                         writer.write(b"(")?;

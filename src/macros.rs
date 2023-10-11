@@ -153,3 +153,12 @@ macro_rules! write_body_with_end {
         $writer.write(b"end")?;
     };
 }
+
+#[macro_export]
+macro_rules! write_documentation {
+    ($node: ident, $writer: ident, $context: expr) => {
+        if let Some(documentation_context) = &$context.documentation_context {
+            documentation_context.write_documentation($writer, $context.indent, $node.expression_l.begin)?;
+        }
+    };
+}
