@@ -10,25 +10,32 @@ type KnownModules<'a> = HashMap<String, &'a mut Node>;
 pub fn combine_modules<'a>(node: &'a mut Node) -> () {
     match node {
         Node::Begin(begin) => {
-            let mut known_modules: KnownModules = HashMap::new();
-            let mut valid_indexes: Vec<bool> = Vec::with_capacity(begin.statements.len());
-            for node in begin.statements.iter_mut() {
-                match node {
-                    Node::Class(_) | Node::Module(_) => {
-                        let len_before = known_modules.len();
-                        combine_modules_internal(node, &mut known_modules);
-                        valid_indexes.push(len_before < known_modules.len())
+            let mut statements_count = begin.statements.len();
+            loop {
+                let mut known_modules: KnownModules = HashMap::new();
+                let mut valid_indexes: Vec<bool> = Vec::with_capacity(begin.statements.len());
+                for node in begin.statements.iter_mut() {
+                    match node {
+                        Node::Class(_) | Node::Module(_) => {
+                            let len_before = known_modules.len();
+                            combine_modules_internal(node, &mut known_modules);
+                            valid_indexes.push(len_before < known_modules.len())
+                        }
+                        _ => valid_indexes.push(true),
                     }
-                    _ => valid_indexes.push(true),
                 }
+                begin.statements = begin
+                    .statements
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| valid_indexes[*i])
+                    .map(|(_, node)| node.to_owned())
+                    .collect();
+                if statements_count == begin.statements.len() {
+                    break;
+                }
+                statements_count = begin.statements.len();
             }
-            begin.statements = begin
-                .statements
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| valid_indexes[*i])
-                .map(|(_, node)| node.to_owned())
-                .collect();
         }
         Node::Class(klass) => {
             normalize_children(&mut klass.body);

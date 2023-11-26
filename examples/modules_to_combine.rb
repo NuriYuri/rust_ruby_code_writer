@@ -31,3 +31,9 @@ module Test
     end
   end
 end
+module Test
+  class D
+    class G
+    end
+  end
+end
