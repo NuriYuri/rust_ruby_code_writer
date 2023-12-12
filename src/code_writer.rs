@@ -848,15 +848,53 @@ pub fn write_code<W: Write>(
             }
         }
         Node::Str(str) => {
-            writer.write(b"\'")?;
-            writer.write(
-                str.value
-                    .to_string_lossy()
-                    .replace("\\", "\\\\")
-                    .replace("'", "\\'")
-                    .as_bytes(),
-            )?;
-            writer.write(b"\'")?;
+            let value = str.value.to_string_lossy();
+            if value.contains("\0") {
+                writer.write(b"\"")?;
+                writer.write(
+                    value
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\x00", "\\x00")
+                        .replace("\x01", "\\x01")
+                        .replace("\x02", "\\x02")
+                        .replace("\x03", "\\x03")
+                        .replace("\x04", "\\x04")
+                        .replace("\x05", "\\x05")
+                        .replace("\x06", "\\x06")
+                        .replace("\x07", "\\x07")
+                        .replace("\x08", "\\x08")
+                        .replace("\x09", "\\x09")
+                        .replace("\x0B", "\\x0B")
+                        .replace("\x0C", "\\x0C")
+                        .replace("\x0E", "\\x0E")
+                        .replace("\x0F", "\\x0F")
+                        .replace("\x10", "\\x10")
+                        .replace("\x11", "\\x11")
+                        .replace("\x12", "\\x12")
+                        .replace("\x13", "\\x13")
+                        .replace("\x14", "\\x14")
+                        .replace("\x15", "\\x15")
+                        .replace("\x16", "\\x16")
+                        .replace("\x17", "\\x17")
+                        .replace("\x18", "\\x18")
+                        .replace("\x19", "\\x19")
+                        .replace("\x1A", "\\x1A")
+                        .replace("\x1B", "\\x1B")
+                        .replace("\x1C", "\\x1C")
+                        .replace("\x1D", "\\x1D")
+                        .replace("\x1E", "\\x1E")
+                        .replace("\x1F", "\\x1F")
+                        .replace("\r", "\\r")
+                        .replace("\n", "\\n")
+                        .as_bytes(),
+                )?;
+                writer.write(b"\"")?;
+            } else {
+                writer.write(b"\'")?;
+                writer.write(value.replace("\\", "\\\\").replace("'", "\\'").as_bytes())?;
+                writer.write(b"\'")?;
+            }
         }
         Node::Super(super_) => {
             if super_.args.len() > 0 {
