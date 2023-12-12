@@ -23,7 +23,7 @@ fn main() -> Result<(), std::io::Error> {
     let ruby_filename = env::args().nth(1).expect("Ruby Filename is expected");
     let instruction = env::args()
         .nth(2)
-        .expect("instruction is expected (write, edit_method, explore_constants, combine_modules, documentation)");
+        .expect("instruction is expected (write, edit_method, explore_constants, combine_modules, documentation, documentation_with_method_body)");
     let ruby_file_content = fs::read_to_string(ruby_filename.clone())
         .expect(format!("Failed to read ruby file: {}", ruby_filename).as_str());
     let options = ParserOptions {
@@ -83,6 +83,16 @@ fn main() -> Result<(), std::io::Error> {
                 node.as_ref(),
                 &mut writer,
                 &CodeWriterContext::new_with_documentation(result.comments, result.input, true),
+            )?;
+            writer.flush()?;
+        }
+        "documentation_with_method_body" => {
+            let mut writer = BufWriter::new(std::io::stdout());
+            combine_modules(&mut node);
+            write_code(
+                node.as_ref(),
+                &mut writer,
+                &CodeWriterContext::new_with_documentation(result.comments, result.input, false),
             )?;
             writer.flush()?;
         }

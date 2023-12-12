@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-ruby-tests"
+name = "ruby-code-rewrite"
 version = "0.1.0"
 dependencies = [
  "lib-ruby-parser",
