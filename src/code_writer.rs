@@ -850,45 +850,13 @@ pub fn write_code<W: Write>(
         }
         Node::Str(str) => {
             let value = str.value.to_string_lossy();
-            if value.contains("\0") {
+            if value.contains("\0") || value.contains("\n") {
                 writer.write(b"\"")?;
                 writer.write(
-                    value
-                        .replace("\\", "\\\\")
-                        .replace("\"", "\\\"")
-                        .replace("\x00", "\\x00")
-                        .replace("\x01", "\\x01")
-                        .replace("\x02", "\\x02")
-                        .replace("\x03", "\\x03")
-                        .replace("\x04", "\\x04")
-                        .replace("\x05", "\\x05")
-                        .replace("\x06", "\\x06")
-                        .replace("\x07", "\\x07")
-                        .replace("\x08", "\\x08")
-                        .replace("\x09", "\\x09")
-                        .replace("\x0B", "\\x0B")
-                        .replace("\x0C", "\\x0C")
-                        .replace("\x0E", "\\x0E")
-                        .replace("\x0F", "\\x0F")
-                        .replace("\x10", "\\x10")
-                        .replace("\x11", "\\x11")
-                        .replace("\x12", "\\x12")
-                        .replace("\x13", "\\x13")
-                        .replace("\x14", "\\x14")
-                        .replace("\x15", "\\x15")
-                        .replace("\x16", "\\x16")
-                        .replace("\x17", "\\x17")
-                        .replace("\x18", "\\x18")
-                        .replace("\x19", "\\x19")
-                        .replace("\x1A", "\\x1A")
-                        .replace("\x1B", "\\x1B")
-                        .replace("\x1C", "\\x1C")
-                        .replace("\x1D", "\\x1D")
-                        .replace("\x1E", "\\x1E")
-                        .replace("\x1F", "\\x1F")
-                        .replace("\r", "\\r")
-                        .replace("\n", "\\n")
-                        .as_bytes(),
+                    escape_all_special_chars_for_quote_strings(
+                        value.replace("\\", "\\\\").replace("\"", "\\\""),
+                    )
+                    .as_bytes(),
                 )?;
                 writer.write(b"\"")?;
             } else {
@@ -1032,16 +1000,54 @@ fn is_node_begin_block(node: &Node) -> bool {
     return false;
 }
 
+fn escape_all_special_chars_for_quote_strings(string: String) -> String {
+    return string
+        .replace("\x00", "\\x00")
+        .replace("\x01", "\\x01")
+        .replace("\x02", "\\x02")
+        .replace("\x03", "\\x03")
+        .replace("\x04", "\\x04")
+        .replace("\x05", "\\x05")
+        .replace("\x06", "\\x06")
+        .replace("\x07", "\\x07")
+        .replace("\x08", "\\x08")
+        .replace("\x09", "\\x09")
+        .replace("\x0B", "\\x0B")
+        .replace("\x0C", "\\x0C")
+        .replace("\x0E", "\\x0E")
+        .replace("\x0F", "\\x0F")
+        .replace("\x10", "\\x10")
+        .replace("\x11", "\\x11")
+        .replace("\x12", "\\x12")
+        .replace("\x13", "\\x13")
+        .replace("\x14", "\\x14")
+        .replace("\x15", "\\x15")
+        .replace("\x16", "\\x16")
+        .replace("\x17", "\\x17")
+        .replace("\x18", "\\x18")
+        .replace("\x19", "\\x19")
+        .replace("\x1A", "\\x1A")
+        .replace("\x1B", "\\x1B")
+        .replace("\x1C", "\\x1C")
+        .replace("\x1D", "\\x1D")
+        .replace("\x1E", "\\x1E")
+        .replace("\x1F", "\\x1F")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n");
+}
+
 fn write_string_with_escape<W: Write>(
     writer: &mut BufWriter<W>,
     string: &Bytes,
     escape: &str,
     escape_to: &str,
 ) -> Result<(), std::io::Error> {
+    let mut working_string = string.to_string_lossy();
+    if escape.eq("\"") {
+        working_string = working_string.replace("\\", "\\\\");
+    }
     writer.write(
-        string
-            .to_string_lossy()
-            .replace(escape, escape_to)
+        escape_all_special_chars_for_quote_strings(working_string.replace(escape, escape_to))
             .replace("#", "\\#")
             .as_bytes(),
     )?;
