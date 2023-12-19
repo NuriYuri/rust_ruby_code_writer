@@ -255,6 +255,7 @@ pub fn write_code<W: Write>(
             write_documentation!(asgn, writer, context);
             if let Some(scope) = &asgn.scope {
                 write_code(&scope, writer, &child_context)?;
+                writer.write(b"::")?;
             }
             write_assign!(asgn, writer, &child_context);
         }
