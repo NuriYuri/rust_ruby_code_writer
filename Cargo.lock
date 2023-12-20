@@ -9,6 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e72b4bf1c2b13430eeaf9f1c60d08e1e8fbaff5fd52ce53711e773131a997ff"
 
 [[package]]
+name = "escape-bytes"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
+
+[[package]]
 name = "lib-ruby-parser"
 version = "4.0.5+ruby-3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21,5 +27,6 @@ dependencies = [
 name = "ruby-code-rewrite"
 version = "0.1.0"
 dependencies = [
+ "escape-bytes",
  "lib-ruby-parser",
 ]
