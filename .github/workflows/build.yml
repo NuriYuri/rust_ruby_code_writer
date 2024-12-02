@@ -18,7 +18,7 @@ jobs:
       run: cargo build --verbose --release
     - uses: actions/upload-artifact@v4
       with:
-        name: binary-output
+        name: binary-output-${{ matrix.os }}
         path: |
           target/release/ruby-code-rewrite
           target/release/ruby-code-rewrite.exe
